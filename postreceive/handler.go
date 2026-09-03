@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"encoding/json"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/hmac"
+	"encoding/hex"
+	"hash"
 	"strings"
 	"crypto/subtle"
 	"github.com/homedepot/github-webhook/events"
@@ -21,6 +24,8 @@ const APPLICATION_JSON = "application/json"
 const USER_AGENT = "User-Agent"
 const X_GITHUB_DELIVERY = "X-Github-Delivery"
 const X_GITHUB_EVENT = "X-GitHub-Event"
+const X_HUB_SIGNATURE = "X-Hub-Signature"
+const X_HUB_SIGNATURE_256 = "X-Hub-Signature-256"
 
 func HttpHandler(w http.ResponseWriter, req *http.Request) {
 
@@ -124,22 +129,38 @@ func SetSecret(value string) {
 	secret = value
 }
 
+// validateSignature verifies the GitHub HMAC signature of the payload. It fails
+// closed: an empty secret or a missing/invalid signature rejects the request.
+// X-Hub-Signature-256 (HMAC-SHA256) is preferred; the legacy X-Hub-Signature
+// (HMAC-SHA1) header is only consulted when the SHA-256 header is absent.
 func validateSignature(payload []byte, secret string, req *http.Request) bool {
 
 	if len(secret) == 0 {
-		return true
-	}
-
-	requestSignature := req.Header.Get("X-Hub-Signature")
-	if len(requestSignature) == 0 {
 		return false
 	}
-	mac := hmac.New(sha1.New, []byte(secret))
-	mac.Reset()
-	mac.Write([]byte(payload))
-	calculatedSignature := fmt.Sprintf("sha1=%x", mac.Sum(nil))
 
-	return subtle.ConstantTimeCompare([]byte(requestSignature), []byte(calculatedSignature)) == 1
+	if sig := req.Header.Get(X_HUB_SIGNATURE_256); len(sig) > 0 {
+		return verifyHmac(sha256.New, "sha256=", sig, payload, secret)
+	}
+
+	if sig := req.Header.Get(X_HUB_SIGNATURE); len(sig) > 0 {
+		return verifyHmac(sha1.New, "sha1=", sig, payload, secret)
+	}
+
+	return false
+}
+
+func verifyHmac(h func() hash.Hash, prefix string, signature string, payload []byte, secret string) bool {
+	if !strings.HasPrefix(signature, prefix) {
+		return false
+	}
+	given, err := hex.DecodeString(signature[len(prefix):])
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(h, []byte(secret))
+	mac.Write(payload)
+	return subtle.ConstantTimeCompare(given, mac.Sum(nil)) == 1
 }
 
 var metrics *expvar.Map
