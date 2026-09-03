@@ -30,7 +30,7 @@ var (
 	logPrefix = app.Flag("log-prefix", "Log prefix").OverrideDefaultFromEnvar("LOG_PREFIX").Default("").String()
 	logFormat = app.Flag("log-format", "Log format").OverrideDefaultFromEnvar("LOG_FORMAT").Default(strconv.Itoa(log.LstdFlags)).Int()
 
-	githubSecret = app.Flag("github-secret", "Optional Github Secret").OverrideDefaultFromEnvar("GITHUB_SECRET").Default("").String()
+	githubSecret = app.Flag("github-secret", "Github webhook secret used to verify request signatures (required unless --validate-only)").OverrideDefaultFromEnvar("GITHUB_SECRET").Default("").String()
 
 	statusInterval = app.Flag("status-interval", "Status log message interval").Default("300s").OverrideDefaultFromEnvar("STATUS_INTERVAL").Duration()
 )
@@ -71,6 +71,10 @@ func main() {
 	if *validateOnly {
 		log.Println("Configuration seems to OK.")
 		os.Exit(0)
+	}
+
+	if len(*githubSecret) == 0 {
+		log.Fatal("GITHUB_SECRET (--github-secret) must be set; refusing to serve unauthenticated webhooks")
 	}
 
 	postreceive.SetSecret(*githubSecret)
