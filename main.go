@@ -11,7 +11,6 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -82,13 +81,14 @@ func main() {
 	executor.SetConfig(config)
 	executor.SetMetrics(metrics)
 
-	http.HandleFunc("/postreceive", postreceive.HttpHandler)
-	http.HandleFunc("/favicon.ico", http.NotFound)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/postreceive", postreceive.HttpHandler)
+	mux.HandleFunc("/favicon.ico", http.NotFound)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write(Splash)
 	})
 
-	web.Listen(*port)
+	web.Listen(*port, mux)
 
 	status.SetMetrics(metrics)
 	statusDone := status.Start(*statusInterval)
