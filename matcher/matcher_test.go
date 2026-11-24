@@ -425,3 +425,21 @@ func TestEventMatcherReusedAcrossTriggers(t *testing.T) {
 	assert.True(t, eventMatcher.Matches(triggers[3]))
 	assert.False(t, eventMatcher.Matches(triggers[4]))
 }
+
+func TestEventMatcherFlattensOnce(t *testing.T) {
+
+	data := map[string]interface{}{"ref": "refs/heads/master"}
+	event := events.Event{
+		Name: "push",
+		Data: data,
+	}
+	trigger := configuration.Trigger{Name: "master", Event: "push", Rules: map[string]string{"ref": "refs/heads/master"}}
+
+	eventMatcher := matcher.NewEventMatcher(event)
+	assert.True(t, eventMatcher.Matches(trigger))
+
+	// The flattened view built by the first rule-bearing trigger is reused for later triggers.
+	data["ref"] = "refs/heads/develop"
+	assert.True(t, eventMatcher.Matches(trigger))
+	assert.False(t, matcher.Matches(trigger, event))
+}
