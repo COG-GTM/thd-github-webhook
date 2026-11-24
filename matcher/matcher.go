@@ -80,7 +80,23 @@ func flattenData(flattened map[string][]string, prefix string, data map[string]i
 	}
 }
 
+// EventMatcher matches one event against many triggers, flattening the event data at most once.
+type EventMatcher struct {
+	event     events.Event
+	flattened map[string][]string
+}
+
+func NewEventMatcher(event events.Event) *EventMatcher {
+	return &EventMatcher{event: event}
+}
+
 func Matches(trigger configuration.Trigger, event events.Event) bool {
+	return NewEventMatcher(event).Matches(trigger)
+}
+
+func (m *EventMatcher) Matches(trigger configuration.Trigger) bool {
+
+	event := m.event
 
 	if !strings.EqualFold(trigger.Event,event.Name) {
 		return false
@@ -90,8 +106,11 @@ func Matches(trigger configuration.Trigger, event events.Event) bool {
 		return true
 	}
 
-	flattened := make(map[string][]string)
-	flattenData(flattened,"", event.Data)
+	if m.flattened == nil {
+		m.flattened = make(map[string][]string)
+		flattenData(m.flattened,"", event.Data)
+	}
+	flattened := m.flattened
 
 	matches := true
 

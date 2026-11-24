@@ -18,8 +18,9 @@ var metrics *expvar.Map
 func ProcessEvent(event events.Event) error {
 
 	var errors []error
+	eventMatcher := matcher.NewEventMatcher(event)
 	for _, trigger := range config.Triggers {
-		if matcher.Matches(trigger, event) {
+		if eventMatcher.Matches(trigger) {
 			errors = append(errors, Execute(trigger, event))
 		}
 	}

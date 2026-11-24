@@ -390,3 +390,38 @@ func TestMatcherFullEvent(t *testing.T) {
 	assert.True(t, matcher.Matches(trigger, event))
 
 }
+func TestEventMatcherReusedAcrossTriggers(t *testing.T) {
+
+	bytes := []byte(`{
+	"ref": "refs/heads/master",
+	"pusher": {"name": "username"}
+}`)
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		assert.FailNow(t, err.Error())
+	}
+
+	event := events.Event{
+		Name: "push",
+		Data: data,
+	}
+
+	triggers := []configuration.Trigger{
+		{Name: "develop", Event: "push", Rules: map[string]string{"ref": "refs/heads/develop"}},
+		{Name: "master", Event: "push", Rules: map[string]string{"ref": "refs/heads/master", "pusher.name": "username"}},
+		{Name: "pull_request", Event: "pull_request", Rules: map[string]string{"ref": "refs/heads/master"}},
+		{Name: "no_rules", Event: "push"},
+		{Name: "other_pusher", Event: "push", Rules: map[string]string{"pusher.name": "someone"}},
+	}
+
+	eventMatcher := matcher.NewEventMatcher(event)
+	for _, trigger := range triggers {
+		assert.Equal(t, matcher.Matches(trigger, event), eventMatcher.Matches(trigger), trigger.Name)
+	}
+	assert.False(t, eventMatcher.Matches(triggers[0]))
+	assert.True(t, eventMatcher.Matches(triggers[1]))
+	assert.False(t, eventMatcher.Matches(triggers[2]))
+	assert.True(t, eventMatcher.Matches(triggers[3]))
+	assert.False(t, eventMatcher.Matches(triggers[4]))
+}
